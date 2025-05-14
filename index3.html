@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <titel>Welcome</titel>
+    </head>
+    <body>
+
+
+        <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HTML</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            background-color: #f0f8ff;
+            margin: 0;
+            padding: 0;
+        }
+        h1 {
+            color: #ff6347;
+            margin-top: 50px;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            background-color: #4caf50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        .box {
+            width: 100px;
+            height: 100px;
+            margin: 20px auto;
+            background-color: #ff6347;
+            animation: spin 2s linear infinite;
+        }
+        @keyframes spin {
+            from {
+                transform: rotate(0deg);
+            }
+            to {
+                transform: rotate(360deg);
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Welcome to HTML!</h1>
+    <p>Click the button to change the box color!</p>
+    <div class="box" id="colorBox"></div>
+    <button onclick="changeColor()">Change Color</button>
+
+    <script>
+        function changeColor() {
+            const box = document.getElementById('colorBox');
+            const randomColor = '#' + Math.floor(Math.random()*16777215).toString(16);
+            box.style.backgroundColor = randomColor;
+        }
+    </script>
+     <br>
+     <br>
+    <a href="index_game01.html">
+        <img src="game-icon.png" width="130" heihgt="130" alt="Catch the Ball Game Icon">
+    </a>
+    <a href ="index_game02.html">
+        <img src="Game_icon.png" width="130" height="130" alt="Shooting Game Icon"> 
+    </a><br><br><br><br><br><br>
+    
+    <img src="game-icon.png" width="130" heihgt="130" alt="Catch the Ball Game Icon">
+    <p>Catch the Ball Game <br>
+        Tap or click the ball to catch it! You have 30 seconds!</p>
+
+    <img src="Game_icon.png" width="130" height="130" alt="Shooting Game Icon">
+    <p>Shooting Game <br>
+        W,S,A,D key to move up, down, left, right. Space key to choot the bullet.<br>
+    Yellow ball: increases your firerate.<br>
+    Green ball: increases your movespeed.</p>
+    
+
+
+
+
+
+
+        
+
+    </body>
+</html>
