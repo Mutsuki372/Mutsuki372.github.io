@@ -1,0 +1,927 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>360 Rogue Tower Defense - Loot Animation</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #1a1a1a;
+            color: white;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            user-select: none;
+            font-size: 16px; /* Base font size for better responsiveness with em units */
+        }
+        #gameCanvas {
+            display: block;
+        }
+        #ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+        .hud-panel {
+            position: absolute;
+            padding: 10px;
+            background: rgba(0, 0, 0, 0.6);
+            border-radius: 5px;
+            pointer-events: auto;
+            border: 1px solid rgba(255,255,255,0.1);
+            font-size: 0.9em; /* Relative to body font size */
+        }
+        /* ターゲット位置の基準となるUI */
+        #stats-hud { top: 10px; left: 10px; width: 170px;}
+        
+        #tower-hud { bottom: 10px; left: 50%; transform: translateX(-50%); text-align: center; width: 300px; }
+        #skills-hud { bottom: 10px; right: 10px; display: flex; gap: 10px; }
+        
+        .skill-btn {
+            width: 50px;
+            height: 50px;
+            background: #444;
+            border: 2px solid #888;
+            border-radius: 5px;
+            cursor: pointer;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px; /* Fixed px for icons, which is generally acceptable */
+        }
+        .skill-btn:active { background: #666; }
+        .skill-btn.disabled { opacity: 0.5; cursor: not-allowed; }
+
+        .screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.85);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            pointer-events: auto;
+            z-index: 10;
+            padding: 20px; /* Add some padding for smaller screens */
+        }
+        .hidden { display: none !important; }
+
+        h1 { color: #4facfe; margin-bottom: 20px; text-shadow: 0 0 10px #4facfe; font-size: 2.5em; } /* Relative font size */
+
+        .btn {
+            background: linear-gradient(45deg, #4facfe 0%, #00f2fe 100%);
+            border: none;
+            padding: 15px 40px;
+            color: white;
+            font-size: 1.2em; /* Relative font size */
+            border-radius: 30px;
+            cursor: pointer;
+            transition: transform 0.1s;
+            box-shadow: 0 0 15px rgba(79, 172, 254, 0.5);
+            margin-top: 20px;
+        }
+        .btn:hover { transform: scale(1.05); }
+
+        .btn-reset {
+            background: transparent;
+            border: 1px solid #e63946;
+            color: #e63946;
+            padding: 10px 20px;
+            font-size: 0.9em; /* Relative font size */
+            border-radius: 20px;
+            cursor: pointer;
+            margin-top: 40px;
+        }
+        .btn-reset:hover { background: #e63946; color: white; }
+
+        .btn-quit {
+            background: #e63946;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            padding: 5px 10px;
+            width: 100%;
+            margin-top: 10px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 0.9em; /* Relative font size */
+        }
+        .btn-quit:hover { background: #ff6b6b; }
+
+        #upgrade-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            width: 90%;
+            max-width: 1000px;
+            height: 60vh;
+            overflow-y: auto;
+            background: rgba(255,255,255,0.05);
+            padding: 20px;
+            border-radius: 10px;
+        }
+        .upgrade-section h3 { margin-top: 0; border-bottom: 1px solid #555; padding-bottom: 5px; font-size: 1.2em; } /* Relative font size */
+        .upgrade-item {
+            background: rgba(0,0,0,0.3);
+            margin-bottom: 10px;
+            padding: 10px;
+            border-radius: 5px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .upgrade-info { font-size: 0.9em; } /* Relative font size */
+        .upgrade-btn {
+            background: #333;
+            color: #ddd;
+            border: 1px solid #555;
+            padding: 5px 10px;
+            cursor: pointer;
+            min-width: 80px;
+            font-size: 0.9em; /* Relative font size */
+        }
+        .upgrade-btn.affordable { background: #2d6a4f; color: white; border-color: #40916c; }
+        
+        .bar-container { width: 100%; height: 10px; background: #333; border-radius: 5px; margin-top: 5px; overflow: hidden;}
+        .hp-bar { height: 100%; background: #e63946; width: 100%; transition: width 0.2s; }
+        
+        .currency { font-weight: bold; margin-right: 15px; font-size: 1em; } /* Relative font size */
+
+        /* --- Mobile-specific adjustments --- */
+        @media (max-width: 768px) {
+            body {
+                font-size: 14px; /* Adjust base font size for mobile */
+            }
+
+            .hud-panel {
+                padding: 8px; /* Slightly less padding for smaller screens */
+            }
+
+            /* Adjust HUD positions/sizes */
+            #stats-hud {
+                width: auto; /* Allow width to be determined by content */
+                font-size: 0.8em;
+            }
+
+            #tower-hud {
+                width: calc(100% - 20px); /* Full width minus margin */
+                bottom: 5px; /* Adjust position */
+                padding: 5px 10px;
+            }
+
+            /* Move skills above tower hud for better access and to prevent overlap */
+            #skills-hud {
+                bottom: 60px; /* Above tower-hud (5px bottom + approx 10px tower-hud height + some gap) */
+                right: 5px; /* Adjust position */
+                gap: 5px; /* Smaller gap between skill buttons */
+            }
+            .skill-btn {
+                width: 45px;
+                height: 45px;
+                font-size: 18px; /* Maintain icon size */
+            }
+
+            h1 {
+                font-size: 1.5em; /* Smaller heading for mobile */
+            }
+
+            .btn {
+                padding: 10px 25px; /* Smaller padding for buttons */
+                font-size: 1.1em;
+            }
+
+            #upgrade-container {
+                grid-template-columns: 1fr; /* Single column for upgrades on mobile */
+                height: 65vh; /* Allow more vertical space for content */
+                padding: 15px;
+                gap: 10px;
+            }
+            .upgrade-item {
+                flex-direction: column; /* Stack info and button vertically */
+                align-items: flex-start;
+                gap: 5px;
+                padding: 8px;
+            }
+            .upgrade-info {
+                width: 100%; /* Take full width */
+            }
+            .upgrade-btn {
+                width: 100%; /* Full width button */
+                min-width: unset; /* Remove min-width restriction */
+                margin-top: 5px;
+                padding: 7px 10px;
+            }
+
+            .screen {
+                padding: 10px;
+            }
+            /* Adjust menu currency font size to be consistent with others */
+            #menu-coins, #menu-diamonds {
+                font-size: 1.2em !important; 
+            }
+        }
+    </style>
+</head>
+<body>
+
+<canvas id="gameCanvas"></canvas>
+
+<div id="ui-layer">
+    <!-- HUD -->
+    <div id="stats-hud" class="hud-panel hidden">
+        <span class="currency" style="color:#ffd700;">Coins: <span id="game-coins">0</span></span><br>
+        <span class="currency" style="color:#00f2fe;">Dia: <span id="game-diamonds">0</span></span>
+        <hr style="border: 0; border-top: 1px solid #444; margin: 5px 0;">
+        Time: <span id="game-time">0:00</span>
+        <br>Threat: <span id="game-threat">x1.0</span>
+        <br>
+        <button class="btn-quit" onclick="game.gameOver()">GIVE UP</button>
+    </div>
+
+    <div id="tower-hud" class="hud-panel hidden">
+        HP: <span id="tower-hp-text">100/100</span>
+        <div class="bar-container">
+            <div id="tower-hp-bar" class="hp-bar"></div>
+        </div>
+    </div>
+
+    <div id="skills-hud" class="hud-panel hidden"></div>
+
+    <!-- Start / Upgrade Screen -->
+    <div id="menu-screen" class="screen">
+        <h1>ROGUE DEFENSE 360</h1>
+        <div style="margin-bottom: 20px;">
+            <span class="currency" id="menu-coins" style="font-size:1.5em; color:#ffd700;">Coins: 0</span>
+            <span class="currency" id="menu-diamonds" style="font-size:1.5em; color:#00f2fe;">Diamonds: 0</span>
+        </div>
+        
+        <div id="upgrade-container">
+            <div class="upgrade-section">
+                <h3>Normal Upgrades (Coins)</h3>
+                <div id="normal-upgrades"></div>
+            </div>
+            <div class="upgrade-section">
+                <h3>Special Upgrades (Diamonds)</h3>
+                <div id="special-upgrades"></div>
+            </div>
+        </div>
+
+        <button class="btn" onclick="game.startRun()">START MISSION</button>
+        <div style="margin-top:5px; font-size:0.8em; color:#aaa;">(Progress is saved automatically)</div>
+        <button class="btn-reset" onclick="game.hardReset()">⚠ RESET ALL DATA</button>
+    </div>
+
+    <!-- Game Over Screen -->
+    <div id="gameover-screen" class="screen hidden">
+        <h1 style="color: #e63946;">MISSION FAILED</h1>
+        <h2 id="fail-reason">Tower Destroyed</h2>
+        <div style="margin: 20px; font-size: 1.2em;">
+            Survived: <span id="result-time"></span><br>
+            Earned: <span style="color:#ffd700;" id="result-coins"></span> Coins / <span style="color:#00f2fe;" id="result-diamonds"></span> Diamonds
+        </div>
+        <button class="btn" onclick="game.returnToMenu()">UPGRADE & RETRY</button>
+    </div>
+</div>
+
+<script>
+/**
+ * SOUND MANAGER
+ */
+const SFX = {
+    ctx: null,
+    init() { if (!this.ctx) this.ctx = new (window.AudioContext || window.webkitAudioContext)(); },
+    playTone(freq, type, duration, vol=0.1) {
+        if (!this.ctx) return;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
+        gain.gain.setValueAtTime(vol, this.ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + duration);
+        osc.connect(gain); gain.connect(this.ctx.destination);
+        osc.start(); osc.stop(this.ctx.currentTime + duration);
+    },
+    createNoiseBuffer() {
+        if (!this.ctx) return null;
+        const bufferSize = this.ctx.sampleRate * 2; 
+        const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+        return buffer;
+    },
+    playShoot() {
+        if (!this.ctx) return;
+        const osc = this.ctx.createOscillator(); const gain = this.ctx.createGain();
+        osc.frequency.setValueAtTime(800, this.ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(100, this.ctx.currentTime + 0.1);
+        gain.gain.setValueAtTime(0.05, this.ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.1);
+        osc.connect(gain); gain.connect(this.ctx.destination);
+        osc.start(); osc.stop(this.ctx.currentTime + 0.1);
+    },
+    playPop() { this.playTone(400, 'triangle', 0.05, 0.1); },
+    playBang() {
+        if (!this.ctx) return;
+        const osc = this.ctx.createOscillator(); const gain = this.ctx.createGain();
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(150, this.ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(40, this.ctx.currentTime + 0.1);
+        gain.gain.setValueAtTime(0.1, this.ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.15);
+        osc.connect(gain); gain.connect(this.ctx.destination);
+        osc.start(); osc.stop(this.ctx.currentTime + 0.2);
+    },
+    playExplosion() {
+        if (!this.ctx) return;
+        const buffer = this.createNoiseBuffer(); if(!buffer) return;
+        const src = this.ctx.createBufferSource(); const gain = this.ctx.createGain(); const filter = this.ctx.createBiquadFilter();
+        src.buffer = buffer;
+        filter.type = 'lowpass'; filter.frequency.setValueAtTime(800, this.ctx.currentTime); filter.frequency.exponentialRampToValueAtTime(100, this.ctx.currentTime + 0.4);
+        gain.gain.setValueAtTime(0.3, this.ctx.currentTime); gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.4);
+        src.connect(filter); filter.connect(gain); gain.connect(this.ctx.destination);
+        src.start(); src.stop(this.ctx.currentTime + 0.5);
+    },
+    playCoin() {
+        if (!this.ctx) return;
+        this.playTone(1500, 'sine', 0.1, 0.05);
+        setTimeout(() => this.playTone(2000, 'sine', 0.2, 0.05), 50);
+    }
+};
+
+/**
+ * Game Configuration
+ */
+const CONFIG = {
+    canvas: document.getElementById('gameCanvas'),
+    ctx: document.getElementById('gameCanvas').getContext('2d'),
+    width: window.innerWidth,
+    height: window.innerHeight,
+    baseHp: 10,
+    baseDamage: 10,
+    enemyTypes: {
+        sqRed:    { type: 'sq', color: '#ff4d4d', hpMult: 1.0,  spd: 1.0, dmgMult: 1.0, reward: 1,  tier: 1, sizeTier: 1 },
+        sqYellow: { type: 'sq', color: '#ffd700', hpMult: 0.8,  spd: 1.8, dmgMult: 0.5, reward: 2,  tier: 2, sizeTier: 1 },
+        sqOrange: { type: 'sq', color: '#ff9f43', hpMult: 2.5,  spd: 0.6, dmgMult: 2.0, reward: 3,  tier: 3, sizeTier: 1 },
+        sqCyan:   { type: 'sq', color: '#00d2d3', hpMult: 1.5,  spd: 1.0, dmgMult: 1.5, reward: 4,  tier: 4, sizeTier: 1, ranged: true },
+        sqMagenta:{ type: 'sq', color: '#ff9ff3', hpMult: 20.0, spd: 2.2, dmgMult: 3.0, reward: 50, tier: 5, sizeTier: 2, isBoss: true }, 
+        sqGreen:  { type: 'sq', color: '#2ecc71', hpMult: 3.0,  spd: 0.8, dmgMult: 1.5, reward: 8,  tier: 6, sizeTier: 2.2, shield: 0.6 },
+        triRed:   { type: 'tri',color: '#e74c3c', hpMult: 2.0,  spd: 1.2, dmgMult: 1.0, reward: 5,  tier: 7, sizeTier: 2.5, lifesteal: true },
+        triBlue:  { type: 'tri',color: '#3498db', hpMult: 2.0,  spd: 0.9, dmgMult: 1.0, reward: 5,  tier: 7, sizeTier: 2.5, split: 3 },
+        triYellow:{ type: 'tri',color: '#f1c40f', hpMult: 5.0,  spd: 1.5, dmgMult: 2.0, reward: 10, tier: 8, sizeTier: 3.0, charge: true }
+    }
+};
+
+const META = {
+    coins: 0,
+    diamonds: 0,
+    upgrades: {
+        damage: { lvl: 0, base: 5, inc: 2, cost: 10, name: "Damage" },
+        atkSpeed: { lvl: 0, base: 1000, inc: -50, min: 100, cost: 20, name: "Atk Speed (ms)" },
+        critRate: { lvl: 0, base: 0.05, inc: 0.02, max: 0.8, cost: 30, name: "Crit Rate" },
+        critDmg: { lvl: 0, base: 1.5, inc: 0.1, cost: 30, name: "Crit Multiplier" },
+        range: { lvl: 0, base: 200, inc: 20, cost: 15, name: "Range" },
+        dropoff: { lvl: 0, base: 0.5, inc: -0.05, min: 0, cost: 25, name: "Dmg Dropoff %" },
+        multishot: { lvl: 0, base: 1, inc: 1, max: 5, cost: 10, costType: 'dia', name: "Multishot (Max Targets)" },
+        explosive: { lvl: 0, base: 0, inc: 30, max: 150, cost: 5, costType: 'dia', name: "Explosive Radius" },
+        bounce: { lvl: 0, base: 0, inc: 1, max: 3, cost: 8, costType: 'dia', name: "Bounce Count" },
+        skill_nuke: { lvl: 0, max: 1, cost: 50, costType: 'dia', name: "Skill: NUKE (Kill all)" },
+        skill_repair: { lvl: 0, max: 1, cost: 20, costType: 'dia', name: "Skill: Repair (50%)" },
+        skill_freeze: { lvl: 0, max: 1, cost: 30, costType: 'dia', name: "Skill: Freeze (5s)" }
+    }
+};
+
+// --- ANIMATION CLASSES ---
+
+// Loot that flies to HUD
+class FloatingLoot {
+    constructor(startX, startY, type) {
+        this.x = startX;
+        this.y = startY;
+        this.type = type; // 'coin' or 'diamond'
+        
+        // Target HUD positions (Dynamically set by game object)
+        this.targetX = game.targetLoot[this.type].x;
+        this.targetY = game.targetLoot[this.type].y;
+        
+        this.speed = 0;
+        this.acceleration = 1.0;
+        this.radius = 6;
+        this.active = true;
+    }
+    update() {
+        const dx = this.targetX - this.x;
+        const dy = this.targetY - this.y;
+        const dist = Math.hypot(dx, dy);
+        
+        // Accelerate
+        this.speed += this.acceleration;
+        
+        // Move
+        const angle = Math.atan2(dy, dx);
+        this.x += Math.cos(angle) * this.speed;
+        this.y += Math.sin(angle) * this.speed;
+
+        if (dist < 20 || this.speed > dist) { // Adjusted threshold for smoother collection
+            this.active = false;
+        }
+    }
+    draw(ctx) {
+        ctx.fillStyle = this.type === 'coin' ? '#ffd700' : '#00f2fe';
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+    }
+}
+
+class Projectile {
+    constructor(x, y, angle, damage, range, type) {
+        this.x = x; this.y = y; this.startX = x; this.startY = y;
+        this.angle = angle; this.speed = 10; this.damage = damage;
+        this.maxRange = range; this.active = true;
+        this.bounces = game.getStat('bounce'); this.radius = 4; this.color = '#fff';
+    }
+    update() {
+        this.x += Math.cos(this.angle) * this.speed;
+        this.y += Math.sin(this.angle) * this.speed;
+        if (Math.hypot(this.x - this.startX, this.y - this.startY) > this.maxRange) this.active = false;
+    }
+    draw(ctx) {
+        ctx.beginPath(); ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+        ctx.fillStyle = this.color; ctx.fill();
+    }
+}
+
+class Enemy {
+    constructor(def, difficultyFactor, angleOverride = null, gen = 0, x=null, y=null) {
+        this.def = def; this.type = def.type;
+        this.hp = CONFIG.baseHp * difficultyFactor * def.hpMult;
+        this.maxHp = this.hp;
+        this.damage = CONFIG.baseDamage * difficultyFactor * def.dmgMult;
+        this.color = def.color; this.speed = def.spd; this.generation = gen;
+
+        const baseRadius = 12;
+        if (def.sizeTier === 1) this.radius = baseRadius;
+        else if (def.sizeTier === 2) this.radius = baseRadius * 3;
+        else this.radius = baseRadius * 3 + (def.sizeTier - 2) * 8;
+
+        const angle = angleOverride !== null ? angleOverride : Math.random() * Math.PI * 2;
+        if (x !== null && y !== null) { this.x = x; this.y = y; }
+        else {
+            const dist = game.spawnDistance + this.radius;
+            this.x = Math.cos(angle) * dist; this.y = Math.sin(angle) * dist;
+        }
+        
+        this.angle = angle; this.markedForDeath = false; this.frozen = false;
+        this.rangedStopDist = 200 + this.radius; this.isRanged = !!def.ranged;
+        this.lastShot = 0; this.shotCooldown = 2000;
+        this.isCharge = !!def.charge; this.chargeTimer = 0;
+        this.chargeTotal = 30000; this.charged = false;
+    }
+    update(dt) {
+        if (this.frozen) return;
+        const distToCenter = Math.hypot(this.x, this.y);
+        const angleToCenter = Math.atan2(-this.y, -this.x);
+        let shouldMove = true;
+
+        if (this.isRanged) {
+            if (distToCenter <= this.rangedStopDist) {
+                shouldMove = false;
+                if (Date.now() - this.lastShot > this.shotCooldown) {
+                    game.enemyProjectiles.push(new Projectile(this.x, this.y, angleToCenter, this.damage, 1000, 'enemy'));
+                    this.lastShot = Date.now();
+                }
+            }
+        }
+        if (this.isCharge && distToCenter <= 150 + this.radius && !this.charged) {
+            shouldMove = false; this.chargeTimer += dt;
+            if (this.chargeTimer >= this.chargeTotal) {
+                this.charged = true; this.speed = 10; this.damage *= 2;
+            }
+        }
+        if (shouldMove && distToCenter > 5) {
+            this.x += Math.cos(angleToCenter) * this.speed;
+            this.y += Math.sin(angleToCenter) * this.speed;
+        }
+    }
+    takeDamage(amount) {
+        if (this.def.shield) amount *= (1 - this.def.shield);
+        this.hp -= amount;
+        game.particles.push(new DamageText(this.x, this.y, Math.round(amount)));
+        if (this.hp <= 0 && !this.markedForDeath) {
+            this.markedForDeath = true; this.onDeath();
+        }
+    }
+    onDeath() {
+        // SOUND
+        if (this.def.sizeTier >= 2) SFX.playExplosion();
+        else if (this.radius > 12) SFX.playBang();
+        else SFX.playPop();
+
+        // LOOT & ANIMATION
+        // Calculate Screen Position for Loot Spawn
+        // ScreenX = CenterX + (WorldX * Scale)
+        const screenX = (CONFIG.width / 2) + (this.x * game.camScale);
+        const screenY = (CONFIG.height / 2) + (this.y * game.camScale);
+
+        if (Math.random() < 0.05 || this.def.isBoss) { 
+            game.runDiamonds++; 
+            SFX.playCoin(); 
+            game.floatingLoot.push(new FloatingLoot(screenX, screenY, 'diamond'));
+        } else { 
+            game.runCoins += this.def.reward;
+            game.floatingLoot.push(new FloatingLoot(screenX, screenY, 'coin'));
+        }
+
+        if (this.def.isBoss && !game.magentaDefeated) {
+            game.magentaDefeated = true;
+            game.magentaDeathTime = Date.now();
+        }
+
+        if (this.def.split && this.generation < this.def.split) {
+            for (let i = 0; i < 2; i++) {
+                const child = new Enemy(this.def, 1, Math.atan2(this.y, this.x) + (Math.random()-0.5), this.generation + 1, this.x, this.y);
+                child.maxHp = this.maxHp / 2; child.hp = child.maxHp; child.radius = this.radius * 0.8;
+                game.enemies.push(child);
+            }
+        }
+    }
+    draw(ctx) {
+        ctx.save(); ctx.translate(this.x, this.y);
+        ctx.fillStyle = this.color;
+        if (this.def.type === 'sq') {
+            ctx.fillRect(-this.radius, -this.radius, this.radius*2, this.radius*2);
+            if (this.def.shield) { ctx.strokeStyle = "#fff"; ctx.lineWidth = 2/game.camScale; ctx.strokeRect(-this.radius-2, -this.radius-2, this.radius*2+4, this.radius*2+4); }
+        } else {
+            const rot = Math.atan2(-this.y, -this.x); ctx.rotate(rot); ctx.beginPath();
+            ctx.moveTo(this.radius, 0); ctx.lineTo(-this.radius, this.radius); ctx.lineTo(-this.radius, -this.radius); ctx.fill();
+        }
+        if (this.isCharge && !this.charged && this.chargeTimer > 0) {
+             ctx.fillStyle = "white";
+             const pct = this.chargeTimer / this.chargeTotal;
+             ctx.fillRect(-this.radius, -this.radius - 10, this.radius*2 * pct, 5);
+        }
+        ctx.restore();
+    }
+}
+
+class DamageText {
+    constructor(x, y, txt) {
+        this.x = x; this.y = y; this.txt = txt; this.life = 30; this.vy = -1;
+    }
+    update() { this.y += this.vy; this.life--; }
+    draw(ctx) {
+        ctx.globalAlpha = this.life / 30; ctx.fillStyle = "#fff";
+        const fontSize = 14 / (game.camScale || 1); ctx.font = `bold ${fontSize}px Arial`;
+        ctx.fillText(this.txt, this.x, this.y); ctx.globalAlpha = 1;
+    }
+}
+
+const game = {
+    state: 'menu', lastTime: 0,
+    runCoins: 0, runDiamonds: 0, startTime: 0,
+    enemies: [], projectiles: [], enemyProjectiles: [], particles: [], floatingLoot: [],
+    tower: { hp: 100, maxHp: 100, cooldown: 0 },
+    magentaDefeated: false, magentaDeathTime: null,
+    skillsUsed: {}, 
+    camScale: 1, spawnDistance: 500, threatFactor: 1.0,
+
+    // Add target positions for loot animation
+    targetLoot: {
+        coin: { x: 40, y: 30 }, // Default fallback values
+        diamond: { x: 40, y: 50 }
+    },
+
+    init() {
+        const save = localStorage.getItem('towerDefRogue_v1');
+        if (save) {
+            const data = JSON.parse(save);
+            META.coins = data.coins || 0; META.diamonds = data.diamonds || 0;
+            if (data.upgrades) for (let k in data.upgrades) if (META.upgrades[k]) META.upgrades[k].lvl = data.upgrades[k].lvl;
+        }
+        this.renderMenu();
+        
+        window.addEventListener('resize', () => {
+            CONFIG.width = window.innerWidth; CONFIG.height = window.innerHeight;
+            CONFIG.canvas.width = CONFIG.width; CONFIG.canvas.height = CONFIG.height;
+            this.updateLootTargetPositions(); // Update on resize
+        });
+        window.dispatchEvent(new Event('resize')); // Initial resize and target position update
+
+        requestAnimationFrame(t => this.loop(t));
+    },
+
+    save() { localStorage.setItem('towerDefRogue_v1', JSON.stringify({ coins: META.coins, diamonds: META.diamonds, upgrades: META.upgrades })); },
+    hardReset() { if(confirm("【警告】\nこれまでのデータを全て削除し、初期状態に戻します。\nよろしいですか？")) { localStorage.removeItem('towerDefRogue_v1'); location.reload(); } },
+    getStat(key) {
+        const u = META.upgrades[key]; if (!u) return 0;
+        let v = u.base + (u.inc * u.lvl);
+        if (u.max !== undefined && u.inc > 0) v = Math.min(v, u.max);
+        if (u.min !== undefined && u.inc < 0) v = Math.max(v, u.min);
+        return v;
+    },
+
+    // New method to update loot target positions based on HUD elements
+    updateLootTargetPositions() {
+        const statsHud = document.getElementById('stats-hud');
+        // Check if statsHud exists and is not hidden
+        if (statsHud && !statsHud.classList.contains('hidden')) {
+            const rect = statsHud.getBoundingClientRect();
+            // These values are offset from the top-left of the stats-hud panel
+            // Adjust to visually target the text for coins/diamonds within the panel
+            this.targetLoot.coin.x = rect.left + 50; 
+            this.targetLoot.coin.y = rect.top + 25; 
+
+            this.targetLoot.diamond.x = rect.left + 50;
+            this.targetLoot.diamond.y = rect.top + 45; 
+        } else {
+            // Fallback for when HUD is hidden (e.g., in menu screen) or not rendered yet
+            // These default to the original hardcoded positions, which is fine as loot won't spawn then.
+            this.targetLoot.coin.x = 40;
+            this.targetLoot.coin.y = 30;
+            this.targetLoot.diamond.x = 40;
+            this.targetLoot.diamond.y = 50;
+        }
+    },
+
+    startRun() {
+        SFX.init(); 
+        this.state = 'playing';
+        document.getElementById('menu-screen').classList.add('hidden');
+        document.getElementById('gameover-screen').classList.add('hidden');
+        document.getElementById('stats-hud').classList.remove('hidden');
+        document.getElementById('tower-hud').classList.remove('hidden');
+        document.getElementById('skills-hud').classList.remove('hidden');
+        
+        // Update loot target positions once HUD is visible
+        this.updateLootTargetPositions(); 
+
+        this.enemies = []; this.projectiles = []; this.enemyProjectiles = []; this.particles = []; this.floatingLoot = [];
+        this.runCoins = 0; this.runDiamonds = 0; this.startTime = Date.now();
+        this.magentaDefeated = false; this.magentaDeathTime = null;
+        this.skillsUsed = {}; this.threatFactor = 1.0;
+        this.tower.maxHp = 100; this.tower.hp = this.tower.maxHp; this.tower.cooldown = 0;
+        this.renderSkillButtons();
+    },
+
+    renderSkillButtons() {
+        const c = document.getElementById('skills-hud'); c.innerHTML = '';
+        ['skill_nuke', 'skill_repair', 'skill_freeze'].forEach(key => {
+            if (META.upgrades[key].lvl > 0) {
+                const b = document.createElement('div'); b.className = 'skill-btn';
+                b.innerHTML = key.includes('nuke') ? '💣' : key.includes('repair') ? '❤️' : '❄️';
+                b.onclick = () => this.activateSkill(key, b); c.appendChild(b);
+            }
+        });
+    },
+
+    activateSkill(key, btn) {
+        if (this.state !== 'playing' || this.skillsUsed[key]) return;
+        let s = false;
+        if (key === 'skill_nuke') { this.enemies.forEach(e => e.takeDamage(999999)); s = true; SFX.playExplosion(); }
+        else if (key === 'skill_repair') { this.tower.hp = Math.min(this.tower.hp + (this.tower.maxHp * 0.5), this.tower.maxHp); s = true; SFX.playCoin(); }
+        else if (key === 'skill_freeze') { this.enemies.forEach(e => e.frozen = true); setTimeout(() => this.enemies.forEach(e => e.frozen = false), 5000); s = true; }
+        if (s) { this.skillsUsed[key] = true; btn.classList.add('disabled'); }
+    },
+
+    spawnLogic() {
+        const time = (Date.now() - this.startTime) / 1000;
+
+        if (!this.magentaDefeated) {
+            this.threatFactor = 1.0;
+        } else {
+            const timeSinceBoss = (Date.now() - this.magentaDeathTime) / 1000;
+            this.threatFactor = 1.0 + (timeSinceBoss / 60) + (Math.pow(timeSinceBoss / 60, 2) * 0.2);
+        }
+
+        const spawnInterval = Math.max(200, 2000 - (time * 5)); 
+        if (Date.now() % Math.floor(spawnInterval) < 20) {
+            let types = ['sqRed'];
+            if (time > 10) types.push('sqYellow');
+            if (time > 30) types.push('sqOrange');
+            if (time > 45) types.push('sqCyan');
+            if (time > 60 && !this.magentaDefeated) types.push('sqMagenta'); 
+            
+            if (this.magentaDefeated) {
+                types.push('sqGreen', 'triRed', 'triBlue', 'triYellow');
+            }
+
+            const pool = [];
+            types.forEach((t, i) => {
+                const weight = Math.max(1, 20 - (i * 2));
+                if(t === 'sqMagenta') pool.push(t); 
+                else { for(let k=0; k<weight; k++) pool.push(t); }
+            });
+            const typeKey = pool[Math.floor(Math.random() * pool.length)];
+            
+            if (typeKey === 'sqMagenta' && this.enemies.some(e=>e.def.type==='sqMagenta')) return;
+
+            this.enemies.push(new Enemy(CONFIG.enemyTypes[typeKey], this.threatFactor));
+        }
+    },
+
+    update(dt) {
+        if (this.state !== 'playing') return;
+        this.spawnLogic();
+        this.tower.cooldown -= dt;
+        if (this.tower.cooldown <= 0) {
+            const range = this.getStat('range');
+            const maxTargets = this.getStat('multishot');
+            let v = this.enemies.filter(e => Math.hypot(e.x, e.y) <= range + e.radius && !e.markedForDeath);
+            v.sort((a, b) => Math.hypot(a.x, a.y) - Math.hypot(b.x, b.y));
+            const targets = v.slice(0, maxTargets);
+            if (targets.length > 0) {
+                targets.forEach(t => {
+                    let d = this.getStat('damage');
+                    if (Math.random() < this.getStat('critRate')) d *= this.getStat('critDmg');
+                    this.projectiles.push(new Projectile(0, 0, Math.atan2(t.y, t.x), d, range));
+                });
+                SFX.playShoot(); 
+                this.tower.cooldown = this.getStat('atkSpeed');
+            }
+        }
+        
+        this.projectiles.forEach(p => p.update()); this.projectiles = this.projectiles.filter(p => p.active);
+        this.enemyProjectiles.forEach(p => p.update());
+        this.enemyProjectiles = this.enemyProjectiles.filter(p => {
+            if (!p.active) return false;
+            if (Math.hypot(p.x, p.y) < 20) { this.damageTower(p.damage); return false; }
+            return true;
+        });
+
+        this.enemies.forEach(e => e.update(dt));
+        
+        for (let p of this.projectiles) {
+            for (let e of this.enemies) {
+                if (p.active && !e.markedForDeath) {
+                    const dist = Math.hypot(p.x - e.x, p.y - e.y);
+                    if (dist < p.radius + e.radius) {
+                        const df = this.getStat('dropoff'); 
+                        const att = (Math.hypot(p.x, p.y) / p.maxRange) * df;
+                        const finalDmg = Math.max(1, p.damage * (1 - att));
+                        e.takeDamage(finalDmg);
+                        
+                        const br = this.getStat('explosive');
+                        if (br > 0) {
+                            this.enemies.forEach(n => {
+                                if (n !== e && Math.hypot(n.x - e.x, n.y - e.y) < br + n.radius) n.takeDamage(finalDmg * 0.5); 
+                            });
+                            this.particles.push({x: e.x, y: e.y, life: 10, maxLife:10, type:'boom', r: br});
+                            SFX.playBang();
+                        }
+
+                        if (p.bounces > 0) {
+                            p.bounces--; let nt = null; let nd = 9999;
+                            this.enemies.forEach(n => {
+                                if (n !== e && !n.markedForDeath) {
+                                    const d = Math.hypot(n.x - p.x, n.y - p.y);
+                                    if (d < 300 && d < nd) { nd = d; nt = n; }
+                                }
+                            });
+                            if (nt) { p.angle = Math.atan2(nt.y - p.y, nt.x - p.x); p.active = true; } else p.active = false;
+                        } else p.active = false;
+                    }
+                }
+            }
+        }
+
+        this.enemies.forEach(e => {
+            if (!e.markedForDeath) {
+                if (Math.hypot(e.x, e.y) < 20 + e.radius) { 
+                    this.damageTower(e.damage); e.takeDamage(999999);
+                    if (e.def.type === 'tri' && e.def.lifesteal) {
+                        e.markedForDeath = false; e.hp += (this.tower.hp * 0.02); e.x *= 1.5; e.y *= 1.5;
+                    }
+                }
+            }
+        });
+        this.enemies = this.enemies.filter(e => !e.markedForDeath);
+        
+        // Update Particles and Loot
+        this.particles.forEach(p => { if (p.update) p.update(); else p.life--; });
+        this.particles = this.particles.filter(p => p.life > 0);
+        this.floatingLoot.forEach(p => p.update());
+        this.floatingLoot = this.floatingLoot.filter(p => p.active);
+
+        this.updateHUD();
+    },
+
+    damageTower(amount) {
+        this.tower.hp -= amount; this.shake = 10;
+        SFX.playBang(); 
+        if (this.tower.hp <= 0) { document.getElementById('fail-reason').innerText = "Tower Destroyed"; this.gameOver(); }
+    },
+
+    draw() {
+        const ctx = CONFIG.ctx;
+        const range = this.getStat('range'); const margin = 200;
+        const reqSize = (range + margin) * 2;
+        let scale = Math.min(CONFIG.width, CONFIG.height) / reqSize;
+        if (scale > 1) scale = 1; this.camScale = scale;
+        this.spawnDistance = (Math.max(CONFIG.width, CONFIG.height) / 2) / scale + 150;
+
+        ctx.fillStyle = '#1a1a1a'; ctx.fillRect(0, 0, CONFIG.width, CONFIG.height);
+        
+        // --- GAME WORLD LAYER (SCALED/TRANSLATED) ---
+        ctx.save();
+        let sx = 0; let sy = 0; if (this.shake > 0) { sx = (Math.random()-0.5)*this.shake; sy = (Math.random()-0.5)*this.shake; this.shake--; }
+        ctx.translate(CONFIG.width/2 + sx, CONFIG.height/2 + sy); ctx.scale(scale, scale);
+
+        ctx.beginPath(); ctx.arc(0, 0, range, 0, Math.PI*2); ctx.strokeStyle = 'rgba(255,255,255,0.1)'; ctx.lineWidth = 2/scale; ctx.stroke();
+        ctx.fillStyle = '#4facfe'; ctx.beginPath(); ctx.arc(0, 0, 20, 0, Math.PI*2); ctx.fill();
+
+        this.enemies.forEach(e => e.draw(ctx));
+        this.projectiles.forEach(p => p.draw(ctx));
+        this.enemyProjectiles.forEach(p => p.draw(ctx));
+        this.particles.forEach(p => {
+            if (p.txt) p.draw(ctx);
+            else if (p.type === 'boom') { ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI*2); ctx.fillStyle = `rgba(255, 100, 50, ${p.life/p.maxLife})`; ctx.fill(); }
+        });
+        
+        ctx.restore();
+
+        // --- UI/OVERLAY LAYER (SCREEN SPACE) ---
+        // Draw floating loot here so they are not affected by camera zoom
+        this.floatingLoot.forEach(p => p.draw(ctx));
+    },
+
+    loop(t) {
+        const dt = t - this.lastTime; this.lastTime = t;
+        if (this.state === 'playing') this.update(dt);
+        this.draw(); requestAnimationFrame(ts => this.loop(ts));
+    },
+
+    updateHUD() {
+        const ts = Math.floor((Date.now() - this.startTime) / 1000);
+        const min = Math.floor(ts / 60); const sec = ts % 60;
+        document.getElementById('game-time').innerText = `${min}:${sec < 10 ? '0'+sec : sec}`;
+        document.getElementById('game-threat').innerText = `x${this.threatFactor.toFixed(1)}`;
+        document.getElementById('game-coins').innerText = this.runCoins;
+        document.getElementById('game-diamonds').innerText = this.runDiamonds;
+        const hpPct = Math.max(0, (this.tower.hp / this.tower.maxHp) * 100);
+        document.getElementById('tower-hp-text').innerText = `${Math.ceil(this.tower.hp)}/${Math.ceil(this.tower.maxHp)}`;
+        document.getElementById('tower-hp-bar').style.width = hpPct + '%';
+    },
+
+    gameOver() {
+        if(this.state !== 'playing') return;
+        SFX.playExplosion();
+        if (event && event.target && event.target.className.includes('btn-quit')) document.getElementById('fail-reason').innerText = "Tactical Retreat";
+        this.state = 'gameover'; META.coins += this.runCoins; META.diamonds += this.runDiamonds; this.save();
+        const ts = Math.floor((Date.now() - this.startTime) / 1000);
+        document.getElementById('result-time').innerText = `${Math.floor(ts/60)}m ${ts%60}s`;
+        document.getElementById('result-coins').innerText = this.runCoins;
+        document.getElementById('result-diamonds').innerText = this.runDiamonds;
+        // Hide game HUD elements directly by their IDs
+        document.getElementById('stats-hud').classList.add('hidden');
+        document.getElementById('tower-hud').classList.add('hidden'); 
+        document.getElementById('skills-hud').classList.add('hidden');
+        document.getElementById('gameover-screen').classList.remove('hidden');
+    },
+
+    returnToMenu() {
+        document.getElementById('gameover-screen').classList.add('hidden'); this.renderMenu();
+        document.getElementById('menu-screen').classList.remove('hidden'); this.state = 'menu';
+    },
+
+    renderMenu() {
+        document.getElementById('menu-coins').innerText = `Coins: ${META.coins}`;
+        document.getElementById('menu-diamonds').innerText = `Diamonds: ${META.diamonds}`;
+        const ren = (id, keys) => {
+            const el = document.getElementById(id); el.innerHTML = '';
+            keys.forEach(k => {
+                const u = META.upgrades[k];
+                const isMax = u.max !== undefined && (u.inc > 0 ? (u.base + u.inc*u.lvl) >= u.max : (u.base + u.inc*u.lvl) <= u.min);
+                const curr = u.costType === 'dia' ? META.diamonds : META.coins; const can = !isMax && curr >= u.cost;
+                const cn = u.costType === 'dia' ? 'Dia' : 'Coins';
+                const d = document.createElement('div'); d.className = 'upgrade-item';
+                d.innerHTML = `<div class="upgrade-info"><strong>${u.name}</strong> (Lvl ${u.lvl})<br>Current: ${Math.abs(Math.round((u.base + u.inc*u.lvl)*100)/100)}</div><button class="upgrade-btn ${can?'affordable':''}" ${!can||isMax?'disabled':''}>${isMax?'MAX':`${u.cost} ${cn}`}</button>`;
+                d.querySelector('button').onclick = () => this.buyUpgrade(k); el.appendChild(d);
+            });
+        };
+        ren('normal-upgrades', ['damage', 'atkSpeed', 'critRate', 'critDmg', 'range', 'dropoff']);
+        ren('special-upgrades', ['multishot', 'explosive', 'bounce', 'skill_nuke', 'skill_repair', 'skill_freeze']);
+    },
+
+    buyUpgrade(key) {
+        const u = META.upgrades[key]; const isDia = u.costType === 'dia';
+        if ((isDia && META.diamonds >= u.cost) || (!isDia && META.coins >= u.cost)) {
+            if(isDia) META.diamonds -= u.cost; else META.coins -= u.cost;
+            u.lvl++; u.cost = Math.floor(u.cost * (isDia?1.5:1.3)); this.save(); this.renderMenu();
+        }
+    }
+};
+
+game.init();
+</script>
+</body>
+</html>
